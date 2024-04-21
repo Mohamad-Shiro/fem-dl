@@ -19,6 +19,36 @@ export function formatBytes(bytes, decimals = 2) {
 	return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
 }
 
+export function formatSize(sizeString, decimals = 2) {
+	const regex = /(\d+(\.\d+)?)\s*(\w+)/;
+	const match = sizeString.match(regex);
+
+	if (!match) {
+		return 'Invalid size format';
+	}
+
+	const bytes = parseFloat(match[1]);
+	const unit = match[3];
+
+	if (isNaN(bytes)) {
+		return 'Invalid size value';
+	}
+
+	const k = 1024;
+	const dm = decimals < 0 ? 0 : decimals;
+	const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+
+	const i = sizes.findIndex((size) => size.toLowerCase() === unit.toLowerCase());
+
+	if (i === -1) {
+		return 'Invalid unit';
+	}
+	let value = parseFloat(bytes / Math.pow(k, i).toFixed(dm));
+	if (value < 1)
+	return `${value} ${sizes[i]}`;
+
+	return `${value} ${sizes[i+1]}`;
+}
 
 export function isPathExists(path) {
 	return fs.access(path).then(() => true).catch(() => false)

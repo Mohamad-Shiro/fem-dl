@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { FEM_ENDPOINT, FEM_API_ENDPOINT, FEM_CAPTIONS_ENDPOINT, CAPTION_EXT, PLAYLIST_EXT, QUALITY_FORMAT, FEM_COURSE_REG, SUPPORTED_FORMATS, USER_AGENT } from './constants.js'
-import { sleep, isPathExists, ensureDir, extendedFetch, safeJoin, formatBytes } from './util/common.js'
+import {sleep, isPathExists, ensureDir, extendedFetch, safeJoin, formatBytes, formatSize} from './util/common.js'
 import ffmpeg from './util/ffmpeg.js'
 import fs from 'node:fs/promises'
 import prompts from 'prompts'
@@ -10,9 +10,11 @@ import colors from 'kleur'
 import os from 'node:os'
 import https, { Agent } from 'node:https'
 import extendFetchCookie from 'fetch-cookie'
-import { FfmpegProgress } from '@dropb/ffmpeg-progress'
+import {createWriteStream} from 'node:fs'
 
 console.clear()
+
+let fileStream = createWriteStream('/home/mohamad/dev/fem-dl/assets/ffmpeg_output.txt', {flags: 'a'});
 
 https.globalAgent = new Agent({ keepAlive: true })
 
@@ -170,11 +172,39 @@ for (const [lesson, episodes] of Object.entries(lessons)) {
 
         headers['Cookie'] = await cookies.getCookieString(m3u8Url)
 
-        const progress = new FfmpegProgress()
+        let duration = 0;
+        const handleProgress = (progressData) => {
+            // Regular expression to match the progress information in FFmpeg output
+            const durationRegex = /Duration: (\d{2}):(\d{2}):(\d{2})\.(\d{2})/;
+            const progressRegex = /size=(\s*\d+(?:\.\d+)?\w*)\s*time=(\d+:\d+:\d+\.\d+)/;
 
-        progress.on('data', (data) => {
-            if (data.percentage && data.size) spinner.text = `[${data.percentage.toFixed()}%] Downloading ${colors.red(lessonName)}/${colors.cyan().bold(fileName)} | Size: ${formatBytes(data.size)} | Remaining: ${x}/${totalEpisodes}`
-        })
+            if (duration === 0) {
+                // Parse duration from FFmpeg output
+                const matchDuration = progressData.match(durationRegex);
+                if (matchDuration) {
+                    const hours = parseInt(matchDuration[1], 10);
+                    const minutes = parseInt(matchDuration[2], 10);
+                    const seconds = parseInt(matchDuration[3], 10);
+                    duration = hours * 3600 + minutes * 60 + seconds;
+                }
+            }
+
+            // Parse the output to extract progress information
+            const match = progressData.match(progressRegex);
+            if (match) {
+                const size = formatSize(match[1].trim());
+                const [hours, minutes, seconds] = match[2].split(':').map(parseFloat);
+                const time = hours * 3600 + minutes * 60 + seconds;
+
+                // Calculate progress percentage or update spinner/log as needed
+                const progressPercentage = Math.round((time / duration) * 100);
+                fileStream.write(`[${progressPercentage}%] Downloading ${(lessonName)}/${(fileName)} | Size: ${size}\n`);
+                spinner.text = `[${progressPercentage}%] Downloading ${colors.red(lessonName)}/${colors.cyan().bold(fileName)} | Size: ${size} | Remaining: ${x}/${totalEpisodes}`;
+            } else {
+                // Output didn't match progress information, log it if needed
+                // silent || console.log(output);
+            }
+        }
 
 
         try {
@@ -187,8 +217,8 @@ for (const [lesson, episodes] of Object.entries(lessons)) {
                 '-c',
                 'copy', tempFilePath
             ], {
-                pipe: progress,
-                silent: true
+                silent: true,
+                handleProgress
             })
         } catch (error) {
             console.error(`Failed to download ${lessonName}/${fileName}`)
@@ -235,7 +265,7 @@ for (const [lesson, episodes] of Object.entries(lessons)) {
                     throw new Error(`Unknown extension found: ${EXTENSION}`)
             }
 
-            await ffmpeg(args, { silent: true })
+            await ffmpeg(args, { silent: true, handleProgress: (progressData) => {}})
             await fs.rm(captionPath)
         } else {
             await fs.copyFile(tempFilePath, finalFilePath)

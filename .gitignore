@@ -1,2 +1,5 @@
+.idea
 node_modules
 vid_samples
+src/tst_ffmpeg_progress.js
+assets/ffmpeg_output.txt
