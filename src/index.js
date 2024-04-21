@@ -176,18 +176,25 @@ for (const [lesson, episodes] of Object.entries(lessons)) {
             if (data.percentage && data.size) spinner.text = `[${data.percentage.toFixed()}%] Downloading ${colors.red(lessonName)}/${colors.cyan().bold(fileName)} | Size: ${formatBytes(data.size)} | Remaining: ${x}/${totalEpisodes}`
         })
 
-        await ffmpeg([
-            '-y',
-            '-headers', Object.entries(headers).map(([key, value]) => `${key}: ${value}`).join('\r\n') + '\r\n',
-            '-i',
-            m3u8Url,
-            '-map', '0',
-            '-c',
-            'copy', tempFilePath
-        ], {
-            pipe: progress,
-            silent: true
-        })
+
+        try {
+            await ffmpeg([
+                '-y',
+                '-headers', Object.entries(headers).map(([key, value]) => `${key}: ${value}`).join('\r\n') + '\r\n',
+                '-i',
+                m3u8Url,
+                '-map', '0',
+                '-c',
+                'copy', tempFilePath
+            ], {
+                pipe: progress,
+                silent: true
+            })
+        } catch (error) {
+            console.error(`Failed to download ${lessonName}/${fileName}`)
+            console.error(error)
+            continue
+        }
 
 
         // Merge caption
